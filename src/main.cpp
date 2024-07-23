@@ -3,50 +3,58 @@
 #include "valve.h"
 #include "selector.h"
 #include "button.h"
+#include "constants.h"
 
-#define NUM_VALVES 5
+uint8_t master_tempo_index = 0;
+unsigned long master_tempo = TEMPOS[0];
+unsigned long last_idle = 0;
+bool paused = false;
 
-unsigned long master_tempo = 6000;
-uint8_t pins[NUM_VALVES] = {8, 9, 10, 11, 12};
+static const uint8_t VALVE_PINS[] = {8, 9, 10, 11, 12};
+static const size_t NUM_VALVES = sizeof(VALVE_PINS) / sizeof(uint8_t);
 Valve *valves[NUM_VALVES];
 Selector selector(28, 24, 22, 30, 26);
 Button button(52);
 
-// encoder pins
-int pinCLK = 2;
-int pinDT = 3;
+void reset_valves()
+{
+  for (uint8_t i = 0; i < NUM_VALVES; i++)
+    valves[i]->set_pattern_index(0, true);
 
-long oldPosition = -999;
-Encoder myEnc(pinDT, pinCLK);
+  long index = random(NUM_VALVES);
+  uint8_t next = (valves[index]->get_next_pattern_index() + 1) % NUM_PATTERNS;
+
+  Serial.print("Random valve=");
+  Serial.print(index);
+  Serial.print(" Pattern=");
+  Serial.println(next);
+
+  valves[index]->set_pattern_index(next, true);
+}
 
 void setup()
 {
   Serial.begin(9600);
 
   unsigned long now = millis();
+  last_idle = now;
 
   // initialize valves
   for (uint8_t i = 0; i < NUM_VALVES; i++)
   {
-    valves[i] = new Valve(pins[i]);
+    valves[i] = new Valve(VALVE_PINS[i]);
     valves[i]->set_tempo(master_tempo);
     valves[i]->set_start_time(now);
   }
 
-  // set initial patterns to valves
-  // valves[0]->set_pattern(PATTERNS[10], true);
-  // valves[1]->set_pattern(PATTERNS[4], true);
-  // // valves[3]->set_divider(3);
+  // initialize random generator
+  randomSeed(analogRead(0));
+
+  Serial.println("Setup finished, DRUMS STARTING!");
 }
 
 void loop()
 {
-  // long newPosition = myEnc.read();
-  // if (newPosition != oldPosition) {
-  //   oldPosition = newPosition;
-  //   Serial.println(newPosition);
-  // }
-
   unsigned long now = millis();
 
   // update valves
@@ -60,13 +68,57 @@ void loop()
   int8_t selected = selector.get_selected();
 
   // check if the button was pressed
-  if (button.was_released() && selected >= 0 && selected < NUM_VALVES)
+  ButtonState button_state = button.get_state();
+  if (button_state == ButtonState::LONG_PRESSED)
+  {
+    Serial.println("Long pressed => resetting valves");
+    reset_valves();
+
+    last_idle = now; // reset idle timer
+    paused = false;
+  }
+  else if (button_state == ButtonState::CLICKED && selected >= 0)
   {
     uint8_t next = (valves[selected]->get_next_pattern_index() + 1) % NUM_PATTERNS;
+
+    Serial.print("Valve=");
     Serial.print(selected);
-    Serial.print(" ");
+    Serial.print(" Pattern=");
     Serial.println(next);
 
     valves[selected]->set_pattern_index(next, false);
+    last_idle = now; // reset idle timer
+    paused = false;
+  }
+  else if (!paused && button_state == ButtonState::CLICKED && selected == -1) // pressed button and no valve is selected => cycle through master tempo presets
+  {
+    master_tempo_index = (master_tempo_index + 1) % NUM_TEMPOS;
+    master_tempo = TEMPOS[master_tempo_index];
+
+    Serial.print("Setting master tempo to ");
+    Serial.println(master_tempo);
+
+    for (uint8_t i = 0; i < NUM_VALVES; i++)
+      valves[i]->set_tempo(master_tempo);
+
+    last_idle = now; // reset idle timer
+    paused = false;
+  }
+  else if (paused && button_state == ButtonState::CLICKED && selected == -1) // pressed button when paused while no valve is selected => set pattern to random valve
+  {
+    reset_valves();
+
+    last_idle = now; // reset idle timer
+    paused = false;
+  }
+
+  // idle time passed => set all valves to pattern 0
+  if (!paused && now - last_idle >= IDLE_TIME_MS)
+  {
+    Serial.println("Idle time passed, pausing...");
+    for (uint8_t i = 0; i < NUM_VALVES; i++)
+      valves[i]->set_pattern_index(0, true);
+
+    paused = true;
   }
 }

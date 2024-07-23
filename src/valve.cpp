@@ -41,8 +41,10 @@ void Valve::set_start_time(unsigned long time)
 void Valve::set_pattern_index(uint8_t pattern_index, bool instant)
 {
   if (instant)
+  {
     this->m_pattern_index = pattern_index;
-  else
+    this->m_next_pattern_index = pattern_index;
+  } else
   {
     this->m_next_pattern_index = pattern_index;
     this->m_pattern_transition = true;
@@ -70,7 +72,7 @@ bool Valve::should_play()
 void Valve::tick(unsigned long now)
 {
   // if the valve is open and 'open' time passed -> close
-  if (this->m_open && (now - this->m_last_open >= OPEN_TIME_MS))
+  if (this->m_open && (now - this->m_last_open >= VALVE_OPEN_TIME_MS))
     this->close();
 
   // if the valve is closed, interval is set and interval passed -> open
