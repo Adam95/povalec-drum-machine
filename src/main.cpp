@@ -4,32 +4,34 @@
 #include "selector.h"
 #include "button.h"
 #include "constants.h"
+#include "servo.h"
 
 uint8_t master_tempo_index = 0;
 unsigned long master_tempo = TEMPOS[0];
 unsigned long last_idle = 0;
 bool paused = false;
 
-static const uint8_t VALVE_PINS[] = {8, 9, 10, 11, 12};
-static const size_t NUM_VALVES = sizeof(VALVE_PINS) / sizeof(uint8_t);
-Valve *valves[NUM_VALVES];
+static const uint8_t SERVO_CHANNELS[] = {0, 1, 2, 3};
+static const size_t NUM_SERVOS = sizeof(SERVO_CHANNELS) / sizeof(uint8_t);
 Selector selector(28, 24, 22, 30, 26);
 Button button(52);
+Adafruit_PWMServoDriver servo_driver;
+Servo *servos[NUM_SERVOS];
 
-void reset_valves()
+void reset_servos()
 {
-  for (uint8_t i = 0; i < NUM_VALVES; i++)
-    valves[i]->set_pattern_index(0, true);
+  for (uint8_t i = 0; i < NUM_SERVOS; i++)
+    servos[i]->set_pattern_index(0, true);
 
-  long index = random(NUM_VALVES);
-  uint8_t next = (valves[index]->get_next_pattern_index() + 1) % NUM_PATTERNS;
+  long index = random(NUM_SERVOS);
+  uint8_t next = (servos[index]->get_next_pattern_index() + 1) % NUM_PATTERNS;
 
   Serial.print("Random valve=");
   Serial.print(index);
   Serial.print(" Pattern=");
   Serial.println(next);
 
-  valves[index]->set_pattern_index(next, true);
+  servos[index]->set_pattern_index(next, true);
 }
 
 void setup()
@@ -39,12 +41,16 @@ void setup()
   unsigned long now = millis();
   last_idle = now;
 
-  // initialize valves
-  for (uint8_t i = 0; i < NUM_VALVES; i++)
+  // initialize servo driver
+  servo_driver.begin();
+  servo_driver.setPWMFreq(50);
+
+  // initialize servos
+  for (uint8_t i = 0; i < NUM_SERVOS; i++)
   {
-    valves[i] = new Valve(VALVE_PINS[i]);
-    valves[i]->set_tempo(master_tempo);
-    valves[i]->set_start_time(now);
+    servos[i] = new Servo(SERVO_CHANNELS[i], &servo_driver, i % 2 == 0);
+    servos[i]->set_tempo(master_tempo);
+    servos[i]->set_start_time(now);
   }
 
   // initialize random generator
@@ -57,36 +63,36 @@ void loop()
 {
   unsigned long now = millis();
 
-  // update valves
-  for (uint8_t i = 0; i < NUM_VALVES; i++)
-    valves[i]->tick(now);
+  // update servos
+  for (uint8_t i = 0; i < NUM_SERVOS; i++)
+    servos[i]->tick(now);
 
   // update button
   button.tick(now);
 
-  // get selected valve
+  // get selected servo
   int8_t selected = selector.get_selected();
 
   // check if the button was pressed
   ButtonState button_state = button.get_state();
   if (button_state == ButtonState::LONG_PRESSED)
   {
-    Serial.println("Long pressed => resetting valves");
-    reset_valves();
+    Serial.println("Long pressed => resetting servos");
+    reset_servos();
 
     last_idle = now; // reset idle timer
     paused = false;
   }
   else if (button_state == ButtonState::CLICKED && selected >= 0)
   {
-    uint8_t next = (valves[selected]->get_next_pattern_index() + 1) % NUM_PATTERNS;
+    uint8_t next = (servos[selected]->get_next_pattern_index() + 1) % NUM_PATTERNS;
 
     Serial.print("Valve=");
     Serial.print(selected);
     Serial.print(" Pattern=");
     Serial.println(next);
 
-    valves[selected]->set_pattern_index(next, false);
+    servos[selected]->set_pattern_index(next, false);
     last_idle = now; // reset idle timer
     paused = false;
   }
@@ -98,26 +104,26 @@ void loop()
     Serial.print("Setting master tempo to ");
     Serial.println(master_tempo);
 
-    for (uint8_t i = 0; i < NUM_VALVES; i++)
-      valves[i]->set_tempo(master_tempo);
+    for (uint8_t i = 0; i < NUM_SERVOS; i++)
+      servos[i]->set_tempo(master_tempo);
 
     last_idle = now; // reset idle timer
     paused = false;
   }
   else if (paused && button_state == ButtonState::CLICKED && selected == -1) // pressed button when paused while no valve is selected => set pattern to random valve
   {
-    reset_valves();
+    reset_servos();
 
     last_idle = now; // reset idle timer
     paused = false;
   }
 
-  // idle time passed => set all valves to pattern 0
+  // idle time passed => set all servos to pattern 0
   if (!paused && now - last_idle >= IDLE_TIME_MS)
   {
     Serial.println("Idle time passed, pausing...");
-    for (uint8_t i = 0; i < NUM_VALVES; i++)
-      valves[i]->set_pattern_index(0, true);
+    for (uint8_t i = 0; i < NUM_SERVOS; i++)
+      servos[i]->set_pattern_index(0, true);
 
     paused = true;
   }

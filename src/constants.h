@@ -4,9 +4,10 @@
 #include <Arduino.h>
 
 static const unsigned long VALVE_OPEN_TIME_MS = 50;
+static const unsigned long SERVO_OPEN_TIME_MS = 100;
 static const unsigned long IDLE_TIME_MS = 20l * (60l * 1000l); // 20 seconds
 
-static const uint16_t TEMPOS[] = {6000, 8000, 5000};
+static const uint16_t TEMPOS[] = {6000, 8000, 3000};
 
 static const uint16_t PATTERNS[] =
 {
