@@ -5,7 +5,7 @@
 
 enum ButtonState
 {
-  NOP, CLICKED, LONG_PRESSED
+  NOP, PRESSED, LONG_PRESSED, CLICKED
 };
 
 class Button
@@ -18,6 +18,8 @@ private:
   uint8_t m_pin;
   int m_pinState;
   bool m_released;
+  bool m_pressed;
+  bool m_canBePressed;
   bool m_long_pressed;
   unsigned long m_lastDebounce;
   unsigned long m_lastPressed;

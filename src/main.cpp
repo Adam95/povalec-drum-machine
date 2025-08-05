@@ -12,11 +12,14 @@ unsigned long last_idle = 0;
 bool paused = false;
 
 static const uint8_t SERVO_CHANNELS[] = {0, 1, 2, 3};
+static const uint8_t SERVO_BUTTON_PINS[] = {34, 32};
 static const size_t NUM_SERVOS = sizeof(SERVO_CHANNELS) / sizeof(uint8_t);
+static const size_t NUM_SERVO_BUTTONS = sizeof(SERVO_BUTTON_PINS) / sizeof(uint8_t);
 Selector selector(28, 24, 22, 30, 26);
-Button button(52);
+Button button(36);
 Adafruit_PWMServoDriver servo_driver;
 Servo *servos[NUM_SERVOS];
+Button *servoButtons[NUM_SERVO_BUTTONS];
 
 void reset_servos()
 {
@@ -53,6 +56,12 @@ void setup()
     servos[i]->set_start_time(now);
   }
 
+  // initialize servo buttons
+  for (uint8_t i = 0; i < NUM_SERVO_BUTTONS; i++)
+  {
+    servoButtons[i] = new Button(SERVO_BUTTON_PINS[i]);
+  }
+
   // initialize random generator
   randomSeed(analogRead(0));
 
@@ -67,8 +76,14 @@ void loop()
   for (uint8_t i = 0; i < NUM_SERVOS; i++)
     servos[i]->tick(now);
 
-  // update button
+  // update buttons
   button.tick(now);
+
+  // update servo buttons
+  for (uint8_t i = 0; i < NUM_SERVO_BUTTONS; i++)
+  {
+    servoButtons[i]->tick(now);
+  }
 
   // get selected servo
   int8_t selected = selector.get_selected();
@@ -116,6 +131,15 @@ void loop()
 
     last_idle = now; // reset idle timer
     paused = false;
+  }
+
+  // check if servo button is pressed => if yes, open the corresponding valve
+  for (uint8_t i = 0; i < NUM_SERVO_BUTTONS; i++)
+  {
+    ButtonState state = servoButtons[i]->get_state();
+    if (state == ButtonState::PRESSED) {
+      servos[i]->open(now);
+    }
   }
 
   // idle time passed => set all servos to pattern 0

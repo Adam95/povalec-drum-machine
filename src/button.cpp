@@ -7,17 +7,25 @@ Button::Button(uint8_t pin)
   this->m_pin = pin;
   this->m_pinState = digitalRead(pin);
   this->m_released = false;
+  this->m_pressed = false;
+  this->m_canBePressed = true;
   this->m_long_pressed = false;
 }
 
 ButtonState Button::get_state()
 {
   // return true if the button was released, but only on the first call
-  if (this->m_released)
+  if (this->m_pressed)
+  {
+    this->m_pressed = false;
+    return ButtonState::PRESSED;
+  }
+  else if (this->m_released)
   {
     this->m_released = false;
     return ButtonState::CLICKED;
-  } else if (this->m_long_pressed)
+  }
+  else if (this->m_long_pressed)
   {
     this->m_long_pressed = false;
     return ButtonState::LONG_PRESSED;
@@ -35,10 +43,17 @@ void Button::tick(unsigned long now)
   {
     this->m_lastDebounce = now;
     this->m_lastPressed = 0;
-  } else if (this->m_pinState == HIGH && read == LOW) // falling edge (button pressed or signal bounce) => reset debounce time
+  }
+  else if (this->m_pinState == HIGH && read == LOW) // falling edge (button pressed or signal bounce) => reset debounce time
   {
     this->m_lastDebounce = 0;
     this->m_lastPressed = now;
+  }
+
+  if (this->m_canBePressed && this->m_lastPressed != 0 && now - this->m_lastPressed > 20) 
+  {
+    this->m_pressed = true;
+    this->m_canBePressed = false;
   }
 
   // debounce delay passed => mark as released
@@ -46,7 +61,9 @@ void Button::tick(unsigned long now)
   {
     this->m_lastDebounce = 0;
     this->m_released = true;
-  } else if (this->m_lastPressed != 0 && !this->m_long_pressed && now - this->m_lastPressed > 3000)
+    this->m_canBePressed = true;
+  }
+  else if (this->m_lastPressed != 0 && !this->m_long_pressed && now - this->m_lastPressed > 3000)
   {
     this->m_lastPressed = 0;
     this->m_long_pressed = true;

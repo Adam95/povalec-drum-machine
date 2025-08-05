@@ -19,9 +19,9 @@ public:
   void set_start_time(unsigned long time);
   void set_pattern_index(uint8_t pattern_index, bool instant);
   void tick(unsigned long now);
+  void open(unsigned long now);
 
 private:
-  void open(unsigned long now);
   void close();
   bool should_play();
 

@@ -97,7 +97,7 @@ void Servo::tick(unsigned long now)
       this->m_pattern_transition = false;
     }
 
-    if (this->should_play())
+    if (this->should_play() && !this->m_open)
       this->open(now);
   }
 }
